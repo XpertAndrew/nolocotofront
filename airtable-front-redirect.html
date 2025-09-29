@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Loading Noloco Record</title>
+    <script src="https://dl.frontapp.com/libs/frontjs.min.js"></script>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            padding: 20px;
+            margin: 0;
+            background: #f5f5f5;
+        }
+        .loading {
+            text-align: center;
+            padding: 40px 20px;
+        }
+        .spinner {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #3498db;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .error {
+            background: #fff3cd;
+            border: 1px solid #ffc107;
+            border-radius: 4px;
+            padding: 15px;
+            margin: 20px;
+            color: #856404;
+        }
+        .error h3 {
+            margin-top: 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="loading">
+        <div class="spinner"></div>
+        <p>Loading Noloco record...</p>
+    </div>
+
+    <script>
+        // Noloco configuration - UPDATE THESE VALUES
+        const NOLOCO_CONFIG = {
+            baseUrl: 'https://xpertfunding.noloco.co',
+            collectionPath: '%F0%9F%92%B0-funding-database/view',
+            parentPage: 'eyJlbGVtZW50SWQiOiJ2ZXc1ZU1mbzVXSzlqaExJdWJfRXZVMVYiLCJlbmFibGVkIjp0cnVlLCJwYXJhbXMiOnt9fQ%3D%3D'
+        };
+
+        function showError(message) {
+            document.body.innerHTML = `
+                <div class="error">
+                    <h3>⚠️ Cannot Load Record</h3>
+                    <p>${message}</p>
+                </div>
+            `;
+        }
+
+        function buildNolocoUrl(recordId) {
+            // Build the complete Noloco URL with the dynamic record ID
+            const url = `${NOLOCO_CONFIG.baseUrl}/${NOLOCO_CONFIG.collectionPath}/${recordId}?_parentPage=${NOLOCO_CONFIG.parentPage}`;
+            return url;
+        }
+
+        // Subscribe to Front context updates
+        Front.contextUpdates.subscribe(context => {
+            try {
+                // Check if conversation exists
+                if (!context || !context.conversation) {
+                    showError('No conversation context found.');
+                    return;
+                }
+
+                // Get the Airtable Record ID from custom field
+                const customFields = context.conversation.custom_fields || {};
+                const recordId = customFields['Airtable Record ID'];
+
+                if (!recordId) {
+                    showError('No Airtable Record ID found for this conversation. Please make sure the custom field "Airtable Record ID" is set.');
+                    return;
+                }
+
+                // Build the Noloco URL and redirect
+                const nolocoUrl = buildNolocoUrl(recordId);
+                console.log('Redirecting to:', nolocoUrl);
+                window.location.href = nolocoUrl;
+
+            } catch (error) {
+                console.error('Error:', error);
+                showError(`An error occurred: ${error.message}`);
+            }
+        });
+
+        // Timeout fallback in case Front doesn't load
+        setTimeout(() => {
+            if (document.querySelector('.loading')) {
+                showError('Front plugin failed to load. Please refresh the page.');
+            }
+        }, 5000);
+    </script>
+</body>
+</html>
