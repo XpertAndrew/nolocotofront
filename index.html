@@ -103,49 +103,90 @@
 
             log('Front SDK loaded successfully!');
 
-            // Try to get context
-            Front.contextUpdates.subscribe(context => {
-                try {
-                    log('Received context from Front', context);
-                    
-                    // Check if conversation exists
-                    if (!context || !context.conversation) {
-                        showError('No conversation context found.');
-                        return;
+            // Try different initialization methods
+            
+            // Method 1: contextUpdates.subscribe
+            try {
+                log('Trying Method 1: contextUpdates.subscribe');
+                Front.contextUpdates.subscribe(context => {
+                    log('Method 1 - Received context', context);
+                    handleContext(context);
+                });
+            } catch (e) {
+                log('Method 1 failed', e.message);
+            }
+
+            // Method 2: Direct context access
+            try {
+                log('Trying Method 2: Direct context access');
+                setTimeout(() => {
+                    if (Front.context) {
+                        log('Method 2 - Found context directly', Front.context);
+                        handleContext(Front.context);
+                    } else {
+                        log('Method 2 - No direct context available');
                     }
+                }, 1000);
+            } catch (e) {
+                log('Method 2 failed', e.message);
+            }
 
-                    log('Conversation found', context.conversation);
-
-                    // Get custom fields
-                    const customFields = context.conversation.custom_fields || {};
-                    log('Custom fields object', customFields);
-                    log('Available custom field keys', Object.keys(customFields));
-
-                    // Try multiple possible key names
-                    const recordId = customFields['Airtable Record ID'] 
-                                  || customFields['airtable_record_id']
-                                  || customFields['airtableRecordId']
-                                  || customFields['fld_orx4'];
-
-                    if (!recordId) {
-                        const availableKeys = Object.keys(customFields);
-                        showError(`No Airtable Record ID found.<br><br>Available custom field keys: ${availableKeys.length > 0 ? availableKeys.join(', ') : 'None'}<br><br>Custom fields object: ${JSON.stringify(customFields, null, 2)}`);
-                        return;
+            // Method 3: Listen for messages
+            try {
+                log('Trying Method 3: Window message listener');
+                window.addEventListener('message', (event) => {
+                    log('Received window message', event.data);
+                    if (event.data && event.data.context) {
+                        log('Method 3 - Found context in message');
+                        handleContext(event.data.context);
                     }
+                });
+            } catch (e) {
+                log('Method 3 failed', e.message);
+            }
+        }
 
-                    log('Found record ID', recordId);
-
-                    // Build URL and redirect
-                    const nolocoUrl = buildNolocoUrl(recordId);
-                    log('Redirecting to', nolocoUrl);
-                    window.location.href = nolocoUrl;
-
-                } catch (error) {
-                    log('Error occurred', error.message);
-                    console.error('Full error:', error);
-                    showError(`An error occurred: ${error.message}`);
+        function handleContext(context) {
+            try {
+                log('Processing context', context);
+                
+                // Check if conversation exists
+                if (!context || !context.conversation) {
+                    showError('No conversation context found.');
+                    return;
                 }
-            });
+
+                log('Conversation found', context.conversation);
+
+                // Get custom fields
+                const customFields = context.conversation.custom_fields || {};
+                log('Custom fields object', customFields);
+                log('Available custom field keys', Object.keys(customFields));
+
+                // Try multiple possible key names
+                const recordId = customFields['Airtable Record ID'] 
+                              || customFields['airtable_record_id']
+                              || customFields['airtableRecordId']
+                              || customFields['fld_orx4'];
+
+                if (!recordId) {
+                    const availableKeys = Object.keys(customFields);
+                    showError(`No Airtable Record ID found.<br><br>Available custom field keys: ${availableKeys.length > 0 ? availableKeys.join(', ') : 'None'}<br><br>Custom fields object: ${JSON.stringify(customFields, null, 2)}`);
+                    return;
+                }
+
+                log('Found record ID', recordId);
+
+                // Build URL and redirect
+                const nolocoUrl = buildNolocoUrl(recordId);
+                log('Redirecting to', nolocoUrl);
+                window.location.href = nolocoUrl;
+
+            } catch (error) {
+                log('Error in handleContext', error.message);
+                console.error('Full error:', error);
+                showError(`An error occurred: ${error.message}`);
+            }
         }
 
         // Start initialization when DOM is ready
