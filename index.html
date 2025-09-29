@@ -4,7 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Loading Noloco Record</title>
-    <script src="https://dl.frontapp.com/libs/frontjs.min.js"></script>
     <style>
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
@@ -40,21 +39,39 @@
         .error h3 {
             margin-top: 0;
         }
+        .debug {
+            background: #e7f3ff;
+            border: 1px solid #2196F3;
+            border-radius: 4px;
+            padding: 15px;
+            margin: 20px;
+            font-family: monospace;
+            font-size: 12px;
+            max-height: 300px;
+            overflow: auto;
+        }
     </style>
 </head>
 <body>
     <div class="loading">
         <div class="spinner"></div>
         <p>Loading Noloco record...</p>
+        <p style="font-size: 12px; color: #666;">Waiting for Front context...</p>
     </div>
 
     <script>
-        // Noloco configuration - UPDATE THESE VALUES
+        // Noloco configuration
         const NOLOCO_CONFIG = {
             baseUrl: 'https://xpertfunding.noloco.co',
             collectionPath: '%F0%9F%92%B0-funding-database/view',
             parentPage: 'eyJlbGVtZW50SWQiOiJ2ZXc1ZU1mbzVXSzlqaExJdWJfRXZVMVYiLCJlbmFibGVkIjp0cnVlLCJwYXJhbXMiOnt9fQ%3D%3D'
         };
+
+        let debugLog = [];
+        function log(message, data = null) {
+            console.log(message, data);
+            debugLog.push(`${message} ${data ? JSON.stringify(data, null, 2) : ''}`);
+        }
 
         function showError(message) {
             document.body.innerHTML = `
@@ -62,64 +79,91 @@
                     <h3>⚠️ Cannot Load Record</h3>
                     <p>${message}</p>
                 </div>
+                <div class="debug">
+                    <strong>Debug Log:</strong><br>
+                    ${debugLog.join('<br>')}
+                </div>
             `;
         }
 
         function buildNolocoUrl(recordId) {
-            // Build the complete Noloco URL with the dynamic record ID
             const url = `${NOLOCO_CONFIG.baseUrl}/${NOLOCO_CONFIG.collectionPath}/${recordId}?_parentPage=${NOLOCO_CONFIG.parentPage}`;
             return url;
         }
 
-        // Subscribe to Front context updates
-        Front.contextUpdates.subscribe(context => {
-            try {
-                // DEBUG: Log the entire context to see what we're getting
-                console.log('Full context:', context);
-                console.log('Custom fields:', context.conversation?.custom_fields);
-                
-                // Check if conversation exists
-                if (!context || !context.conversation) {
-                    showError('No conversation context found.');
-                    return;
-                }
-
-                // Get the Airtable Record ID from custom field
-                const customFields = context.conversation.custom_fields || {};
-                
-                // DEBUG: Log all available keys in custom_fields
-                console.log('Available custom field keys:', Object.keys(customFields));
-                
-                // Try multiple possible key names
-                const recordId = customFields['Airtable Record ID'] 
-                              || customFields['airtable_record_id']
-                              || customFields['airtableRecordId']
-                              || customFields['fld_orx4'];
-
-                if (!recordId) {
-                    showError(`No Airtable Record ID found for this conversation. Please make sure the custom field "Airtable Record ID" is set.<br><br>Available fields: ${Object.keys(customFields).join(', ')}`);
-                    return;
-                }
-
-                console.log('Found record ID:', recordId);
-
-                // Build the Noloco URL and redirect
-                const nolocoUrl = buildNolocoUrl(recordId);
-                console.log('Redirecting to:', nolocoUrl);
-                window.location.href = nolocoUrl;
-
-            } catch (error) {
-                console.error('Error:', error);
-                showError(`An error occurred: ${error.message}`);
+        // Wait for Front SDK to load
+        function initializeFront() {
+            log('Checking if Front SDK is available...');
+            
+            if (typeof Front === 'undefined') {
+                log('Front SDK not loaded yet, retrying...');
+                setTimeout(initializeFront, 500);
+                return;
             }
-        });
 
-        // Timeout fallback in case Front doesn't load
+            log('Front SDK loaded successfully!');
+
+            // Try to get context
+            Front.contextUpdates.subscribe(context => {
+                try {
+                    log('Received context from Front', context);
+                    
+                    // Check if conversation exists
+                    if (!context || !context.conversation) {
+                        showError('No conversation context found.');
+                        return;
+                    }
+
+                    log('Conversation found', context.conversation);
+
+                    // Get custom fields
+                    const customFields = context.conversation.custom_fields || {};
+                    log('Custom fields object', customFields);
+                    log('Available custom field keys', Object.keys(customFields));
+
+                    // Try multiple possible key names
+                    const recordId = customFields['Airtable Record ID'] 
+                                  || customFields['airtable_record_id']
+                                  || customFields['airtableRecordId']
+                                  || customFields['fld_orx4'];
+
+                    if (!recordId) {
+                        const availableKeys = Object.keys(customFields);
+                        showError(`No Airtable Record ID found.<br><br>Available custom field keys: ${availableKeys.length > 0 ? availableKeys.join(', ') : 'None'}<br><br>Custom fields object: ${JSON.stringify(customFields, null, 2)}`);
+                        return;
+                    }
+
+                    log('Found record ID', recordId);
+
+                    // Build URL and redirect
+                    const nolocoUrl = buildNolocoUrl(recordId);
+                    log('Redirecting to', nolocoUrl);
+                    window.location.href = nolocoUrl;
+
+                } catch (error) {
+                    log('Error occurred', error.message);
+                    console.error('Full error:', error);
+                    showError(`An error occurred: ${error.message}`);
+                }
+            });
+        }
+
+        // Start initialization when DOM is ready
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initializeFront);
+        } else {
+            initializeFront();
+        }
+
+        // Timeout fallback
         setTimeout(() => {
             if (document.querySelector('.loading')) {
-                showError('Front plugin failed to load. Please refresh the page.');
+                showError('Failed to initialize Front plugin after 10 seconds. The Front SDK may not be loading properly.');
             }
-        }, 5000);
+        }, 10000);
     </script>
+    
+    <!-- Front SDK - try multiple versions -->
+    <script src="https://dl.frontapp.com/libs/frontjs.min.js"></script>
 </body>
 </html>
