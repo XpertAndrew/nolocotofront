@@ -103,34 +103,42 @@
         }
 
         function tryAllMethods() {
+            updateStatus('Initializing Front SDK...');
+
+            // Check all available methods on Front
+            log('Checking all Front methods...');
+            for (let key in Front) {
+                if (typeof Front[key] === 'function') {
+                    log(`Found Front.${key}() method`);
+                }
+            }
+
+            // Initialize Front if not started
+            if (!Front.started) {
+                log('Front.started is false, attempting initialization...');
+                
+                if (typeof Front.start === 'function') {
+                    log('Calling Front.start()...');
+                    try {
+                        Front.start();
+                        log('✓ Front.start() called successfully');
+                    } catch (e) {
+                        log('✗ Front.start() error:', e.message);
+                    }
+                } else if (typeof Front.init === 'function') {
+                    log('Calling Front.init()...');
+                    try {
+                        Front.init();
+                        log('✓ Front.init() called successfully');
+                    } catch (e) {
+                        log('✗ Front.init() error:', e.message);
+                    }
+                }
+            }
+
             updateStatus('Looking for conversation context...');
 
-            // Method 1: Check if Front has getContext
-            if (typeof Front.getContext === 'function') {
-                log('Trying: Front.getContext()');
-                try {
-                    Front.getContext().then(ctx => {
-                        log('✓ Front.getContext() returned:', ctx);
-                        processContext(ctx);
-                    }).catch(err => {
-                        log('✗ Front.getContext() error:', err.message);
-                    });
-                } catch (e) {
-                    log('✗ Front.getContext() failed:', e.message);
-                }
-            } else {
-                log('✗ Front.getContext is not a function');
-            }
-
-            // Method 2: Check Front.context directly
-            if (Front.context) {
-                log('✓ Found Front.context:', Front.context);
-                processContext(Front.context);
-            } else {
-                log('✗ Front.context is undefined');
-            }
-
-            // Method 3: Listen for postMessage
+            // Listen for postMessage first
             log('Setting up postMessage listener...');
             window.addEventListener('message', (event) => {
                 log('Received postMessage from:', event.origin);
@@ -140,28 +148,48 @@
                     if (event.data.conversation) {
                         log('✓ Found conversation in postMessage');
                         processContext(event.data);
+                    } else if (event.data.context) {
+                        log('✓ Found context in postMessage');
+                        processContext(event.data.context);
                     }
                 }
             });
 
-            // Method 4: Check if there's an on/addEventListener
+            // Set up Front.on listener for all events
             if (typeof Front.on === 'function') {
-                log('Trying: Front.on()');
-                try {
-                    Front.on('*', (data) => {
-                        log('Front.on received:', data);
-                        processContext(data);
-                    });
-                } catch (e) {
-                    log('✗ Front.on failed:', e.message);
-                }
+                log('Setting up Front.on listeners...');
+                
+                const events = ['conversation', 'context', 'change', 'update', '*'];
+                events.forEach(eventName => {
+                    try {
+                        Front.on(eventName, (data) => {
+                            log(`Front.on('${eventName}') received:`, data);
+                            if (data) {
+                                processContext(data);
+                            }
+                        });
+                        log(`✓ Registered Front.on('${eventName}')`);
+                    } catch (e) {
+                        log(`✗ Front.on('${eventName}') failed:`, e.message);
+                    }
+                });
             }
 
-            // Request context from parent
-            log('Requesting context from parent window...');
-            if (window.parent && window.parent !== window) {
-                window.parent.postMessage({ type: 'getContext' }, '*');
-                window.parent.postMessage({ type: 'front:requestContext' }, '*');
+            // Try getConversation if it exists
+            if (typeof Front.getConversation === 'function') {
+                log('Trying: Front.getConversation()');
+                try {
+                    Front.getConversation((err, conversation) => {
+                        if (err) {
+                            log('✗ Front.getConversation() error:', err);
+                        } else {
+                            log('✓ Front.getConversation() returned:', conversation);
+                            processContext({ conversation });
+                        }
+                    });
+                } catch (e) {
+                    log('✗ Front.getConversation() failed:', e.message);
+                }
             }
         }
 
