@@ -175,21 +175,24 @@
                 });
             }
 
-            // Try getConversation if it exists
-            if (typeof Front.getConversation === 'function') {
-                log('Trying: Front.getConversation()');
+            // Try fetchConversation - this is the key method!
+            if (typeof Front.fetchConversation === 'function') {
+                log('Calling Front.fetchConversation()...');
                 try {
-                    Front.getConversation((err, conversation) => {
+                    Front.fetchConversation((err, conversation) => {
                         if (err) {
-                            log('✗ Front.getConversation() error:', err);
+                            log('✗ Front.fetchConversation() error:', err);
+                            updateStatus('ERROR: Could not fetch conversation');
                         } else {
-                            log('✓ Front.getConversation() returned:', conversation);
+                            log('✓ Front.fetchConversation() returned:', conversation);
                             processContext({ conversation });
                         }
                     });
                 } catch (e) {
-                    log('✗ Front.getConversation() failed:', e.message);
+                    log('✗ Front.fetchConversation() exception:', e.message);
                 }
+            } else {
+                log('✗ Front.fetchConversation is not available');
             }
         }
 
