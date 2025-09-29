@@ -74,6 +74,28 @@
             document.getElementById('status').textContent = msg;
         }
 
+        // Check URL parameters FIRST
+        function checkUrlParams() {
+            const urlParams = new URLSearchParams(window.location.search);
+            log('Current URL:', window.location.href);
+            log('URL search params:', window.location.search);
+            
+            const params = {};
+            for (const [key, value] of urlParams.entries()) {
+                params[key] = value;
+            }
+            log('Parsed URL parameters:', params);
+            
+            // Check if conversation ID is in URL
+            if (params.conversation_id || params.conversationId || params.cnv) {
+                log('✓ Found conversation ID in URL!', params.conversation_id || params.conversationId || params.cnv);
+            }
+            
+            return params;
+        }
+
+        const urlParams = checkUrlParams();
+
         function redirect(recordId) {
             const url = `${CONFIG.nolocoBase}/${CONFIG.nolocoPath}/${recordId}?_parentPage=${CONFIG.parentPage}`;
             log('Redirecting to:', url);
