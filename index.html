@@ -15,16 +15,7 @@
             padding: 20px;
             border-radius: 8px;
             margin-bottom: 20px;
-        }
-        .debug {
-            background: #f0f0f0;
-            padding: 15px;
-            border-radius: 4px;
-            font-family: monospace;
-            font-size: 12px;
-            max-height: 400px;
-            overflow-y: auto;
-            white-space: pre-wrap;
+            text-align: center;
         }
         .spinner {
             border: 3px solid #f3f3f3;
@@ -39,25 +30,39 @@
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
         }
+        .error {
+            background: #fff3cd;
+            border: 1px solid #ffc107;
+            padding: 15px;
+            border-radius: 4px;
+            color: #856404;
+        }
+        .debug {
+            background: #f0f0f0;
+            padding: 15px;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 11px;
+            max-height: 400px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            margin-top: 20px;
+        }
     </style>
 </head>
 <body>
     <div class="status">
         <div class="spinner"></div>
-        <p id="status">Initializing...</p>
+        <p id="status">Loading conversation...</p>
     </div>
     <div class="debug" id="debug"></div>
 
-    <script src="https://dl.frontapp.com/libs/frontjs.min.js"></script>
     <script>
-        // Configuration
         const CONFIG = {
             nolocoBase: 'https://xpertfunding.noloco.co',
             nolocoPath: '%F0%9F%92%B0-funding-database/view',
             parentPage: 'eyJlbGVtZW50SWQiOiJ2ZXc1ZU1mbzVXSzlqaExJdWJfRXZVMVYiLCJlbmFibGVkIjp0cnVlLCJwYXJhbXMiOnt9fQ%3D%3D',
-            // Front app credentials
-            appSecret: '53ace6ddcc5f6b7e8fdf3d670f31e8d3',
-            appUuid: '9e281cb296c1126b'
+            apiToken: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJjb250ZXh0IjoiY252XzFmZ3ljeTZ3In0.REPLACE_WITH_YOUR_TOKEN' // Replace with actual API token
         };
 
         let debugOutput = [];
@@ -74,27 +79,14 @@
             document.getElementById('status').textContent = msg;
         }
 
-        // Check URL parameters FIRST
-        function checkUrlParams() {
-            const urlParams = new URLSearchParams(window.location.search);
-            log('Current URL:', window.location.href);
-            log('URL search params:', window.location.search);
-            
-            const params = {};
-            for (const [key, value] of urlParams.entries()) {
-                params[key] = value;
-            }
-            log('Parsed URL parameters:', params);
-            
-            // Check if conversation ID is in URL
-            if (params.conversation_id || params.conversationId || params.cnv) {
-                log('✓ Found conversation ID in URL!', params.conversation_id || params.conversationId || params.cnv);
-            }
-            
-            return params;
+        function showError(msg) {
+            document.querySelector('.status').innerHTML = `
+                <div class="error">
+                    <h3>Cannot Load Record</h3>
+                    <p>${msg}</p>
+                </div>
+            `;
         }
-
-        const urlParams = checkUrlParams();
 
         function redirect(recordId) {
             const url = `${CONFIG.nolocoBase}/${CONFIG.nolocoPath}/${recordId}?_parentPage=${CONFIG.parentPage}`;
@@ -103,189 +95,82 @@
             window.location.href = url;
         }
 
-        // Wait for Front to be available
-        let attempts = 0;
-        function checkFront() {
-            attempts++;
-            log(`Attempt ${attempts}: Checking for Front SDK...`);
+        // Get URL parameters
+        const urlParams = new URLSearchParams(window.location.search);
+        const authSecret = urlParams.get('auth_secret');
+        
+        log('Auth secret from URL:', authSecret);
+        log('Full URL:', window.location.href);
+
+        // Try to extract conversation ID from parent iframe
+        async function getConversationFromParent() {
+            log('Attempting to get conversation from parent window...');
             
-            if (typeof Front === 'undefined') {
-                if (attempts < 20) {
-                    setTimeout(checkFront, 500);
-                } else {
-                    updateStatus('ERROR: Front SDK not loading');
-                    log('ERROR: Front SDK never loaded after 10 seconds');
-                }
-                return;
-            }
-
-            log('✓ Front SDK loaded!');
-            log('Front object properties:', Object.keys(Front));
-            log('Front object:', Front);
-            
-            // Try all possible methods
-            tryAllMethods();
-        }
-
-        function tryAllMethods() {
-            updateStatus('Initializing Front SDK...');
-
-            // Check all available methods on Front
-            log('Checking all Front methods...');
-            for (let key in Front) {
-                if (typeof Front[key] === 'function') {
-                    log(`Found Front.${key}() method`);
-                }
-            }
-
-            // Initialize Front if not started
-            if (!Front.started) {
-                log('Front.started is false, attempting initialization...');
+            return new Promise((resolve) => {
+                let resolved = false;
                 
-                if (typeof Front.init === 'function') {
-                    log('Calling Front.init() with credentials...');
-                    try {
-                        // Try passing credentials
-                        Front.init({
-                            appSecret: CONFIG.appSecret,
-                            appUuid: CONFIG.appUuid
-                        });
-                        log('✓ Front.init() called with config');
-                    } catch (e) {
-                        log('Init with config failed, trying without:', e.message);
-                        try {
-                            Front.init();
-                            log('✓ Front.init() called without config');
-                        } catch (e2) {
-                            log('✗ Front.init() error:', e2.message);
-                        }
-                    }
-                }
-                
-                // Check if it's now started
-                setTimeout(() => {
-                    log('After init, Front.started is:', Front.started);
-                }, 500);
-            }
-
-            updateStatus('Looking for conversation context...');
-
-            // Listen for postMessage first
-            log('Setting up postMessage listener...');
-            window.addEventListener('message', (event) => {
-                log('Received postMessage from:', event.origin);
-                log('postMessage data:', event.data);
-                
-                if (event.data && typeof event.data === 'object') {
-                    if (event.data.conversation) {
-                        log('✓ Found conversation in postMessage');
-                        processContext(event.data);
-                    } else if (event.data.context) {
-                        log('✓ Found context in postMessage');
-                        processContext(event.data.context);
-                    }
-                }
-            });
-
-            // Set up Front.on listener for all events
-            if (typeof Front.on === 'function') {
-                log('Setting up Front.on listeners...');
-                
-                const events = ['conversation', 'context', 'change', 'update', '*'];
-                events.forEach(eventName => {
-                    try {
-                        Front.on(eventName, (data) => {
-                            log(`Front.on('${eventName}') received:`, data);
-                            if (data) {
-                                processContext(data);
-                            }
-                        });
-                        log(`✓ Registered Front.on('${eventName}')`);
-                    } catch (e) {
-                        log(`✗ Front.on('${eventName}') failed:`, e.message);
+                window.addEventListener('message', (event) => {
+                    if (resolved) return;
+                    
+                    log('Received message from parent:', event.data);
+                    
+                    if (event.data && event.data.conversation) {
+                        resolved = true;
+                        resolve(event.data.conversation);
+                    } else if (event.data && event.data.context && event.data.context.conversation) {
+                        resolved = true;
+                        resolve(event.data.context.conversation);
                     }
                 });
-            }
 
-            // Try fetchConversation - this is the key method!
-            if (typeof Front.fetchConversation === 'function') {
-                log('Calling Front.fetchConversation()...');
-                
-                // Set a timeout to see if callback never fires
-                let callbackFired = false;
+                // Request context from parent
+                if (window.parent && window.parent !== window) {
+                    log('Requesting context from parent...');
+                    window.parent.postMessage({ type: 'getContext' }, '*');
+                    window.parent.postMessage({ type: 'front:getConversation' }, '*');
+                }
+
+                // Timeout after 3 seconds
                 setTimeout(() => {
-                    if (!callbackFired) {
-                        log('⚠️ fetchConversation callback did not fire after 3 seconds');
-                        updateStatus('Callback timeout - trying alternative approach...');
+                    if (!resolved) {
+                        resolved = true;
+                        resolve(null);
                     }
                 }, 3000);
+            });
+        }
+
+        // Main execution
+        async function main() {
+            updateStatus('Looking for conversation data...');
+            
+            // Try getting from parent
+            const conversation = await getConversationFromParent();
+            
+            if (conversation) {
+                log('✓ Got conversation from parent!', conversation);
                 
-                try {
-                    const result = Front.fetchConversation((err, conversation) => {
-                        callbackFired = true;
-                        log('fetchConversation callback fired!');
-                        
-                        if (err) {
-                            log('✗ Front.fetchConversation() error:', err);
-                            updateStatus('ERROR: Could not fetch conversation');
-                        } else {
-                            log('✓ Front.fetchConversation() returned:', conversation);
-                            processContext({ conversation });
-                        }
-                    });
-                    
-                    log('fetchConversation returned:', result);
-                } catch (e) {
-                    log('✗ Front.fetchConversation() exception:', e.message);
-                    log('Exception stack:', e.stack);
+                const customFields = conversation.custom_fields || {};
+                log('Custom fields:', customFields);
+                
+                const recordId = customFields['Airtable Record ID'] 
+                              || customFields['airtable_record_id']
+                              || customFields['airtableRecordId'];
+                
+                if (recordId) {
+                    log('✓ Found record ID:', recordId);
+                    redirect(recordId);
+                } else {
+                    log('✗ No Airtable Record ID in custom fields');
+                    showError('No Airtable Record ID found in this conversation. Available fields: ' + Object.keys(customFields).join(', '));
                 }
             } else {
-                log('✗ Front.fetchConversation is not available');
-            }
-            
-            // Also listen for 'conversation' event after init
-            setTimeout(() => {
-                log('Checking if conversation event was emitted...');
-                log('Front.started is now:', Front.started);
-            }, 2000);
-        }
-
-        function processContext(context) {
-            log('Processing context:', context);
-            updateStatus('Processing context...');
-
-            if (!context || !context.conversation) {
-                log('✗ No conversation in context');
-                updateStatus('ERROR: No conversation found');
-                return;
-            }
-
-            const conv = context.conversation;
-            log('Conversation ID:', conv.id);
-            log('Custom fields:', conv.custom_fields);
-
-            const customFields = conv.custom_fields || {};
-            const keys = Object.keys(customFields);
-            log('Available custom field keys:', keys);
-
-            // Try to find record ID
-            const recordId = customFields['Airtable Record ID'] 
-                          || customFields['airtable_record_id']
-                          || customFields['airtableRecordId']
-                          || customFields['fld_orx4'];
-
-            if (recordId) {
-                log('✓ Found Record ID:', recordId);
-                redirect(recordId);
-            } else {
-                updateStatus('ERROR: No Airtable Record ID found');
-                log('✗ No Record ID found in custom fields');
-                log('Custom fields content:', customFields);
+                log('✗ Could not get conversation from parent');
+                showError('Unable to load conversation context. Make sure this plugin is opened from within a conversation view in Front.');
             }
         }
 
-        // Start
-        checkFront();
+        main();
     </script>
 </body>
 </html>
