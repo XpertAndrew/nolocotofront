@@ -178,8 +178,21 @@
             // Try fetchConversation - this is the key method!
             if (typeof Front.fetchConversation === 'function') {
                 log('Calling Front.fetchConversation()...');
+                
+                // Set a timeout to see if callback never fires
+                let callbackFired = false;
+                setTimeout(() => {
+                    if (!callbackFired) {
+                        log('⚠️ fetchConversation callback did not fire after 3 seconds');
+                        updateStatus('Callback timeout - trying alternative approach...');
+                    }
+                }, 3000);
+                
                 try {
-                    Front.fetchConversation((err, conversation) => {
+                    const result = Front.fetchConversation((err, conversation) => {
+                        callbackFired = true;
+                        log('fetchConversation callback fired!');
+                        
                         if (err) {
                             log('✗ Front.fetchConversation() error:', err);
                             updateStatus('ERROR: Could not fetch conversation');
@@ -188,12 +201,21 @@
                             processContext({ conversation });
                         }
                     });
+                    
+                    log('fetchConversation returned:', result);
                 } catch (e) {
                     log('✗ Front.fetchConversation() exception:', e.message);
+                    log('Exception stack:', e.stack);
                 }
             } else {
                 log('✗ Front.fetchConversation is not available');
             }
+            
+            // Also listen for 'conversation' event after init
+            setTimeout(() => {
+                log('Checking if conversation event was emitted...');
+                log('Front.started is now:', Front.started);
+            }, 2000);
         }
 
         function processContext(context) {
