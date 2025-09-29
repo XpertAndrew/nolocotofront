@@ -74,6 +74,10 @@
         // Subscribe to Front context updates
         Front.contextUpdates.subscribe(context => {
             try {
+                // DEBUG: Log the entire context to see what we're getting
+                console.log('Full context:', context);
+                console.log('Custom fields:', context.conversation?.custom_fields);
+                
                 // Check if conversation exists
                 if (!context || !context.conversation) {
                     showError('No conversation context found.');
@@ -82,12 +86,22 @@
 
                 // Get the Airtable Record ID from custom field
                 const customFields = context.conversation.custom_fields || {};
-                const recordId = customFields['Airtable Record ID'];
+                
+                // DEBUG: Log all available keys in custom_fields
+                console.log('Available custom field keys:', Object.keys(customFields));
+                
+                // Try multiple possible key names
+                const recordId = customFields['Airtable Record ID'] 
+                              || customFields['airtable_record_id']
+                              || customFields['airtableRecordId']
+                              || customFields['fld_orx4'];
 
                 if (!recordId) {
-                    showError('No Airtable Record ID found for this conversation. Please make sure the custom field "Airtable Record ID" is set.');
+                    showError(`No Airtable Record ID found for this conversation. Please make sure the custom field "Airtable Record ID" is set.<br><br>Available fields: ${Object.keys(customFields).join(', ')}`);
                     return;
                 }
+
+                console.log('Found record ID:', recordId);
 
                 // Build the Noloco URL and redirect
                 const nolocoUrl = buildNolocoUrl(recordId);
