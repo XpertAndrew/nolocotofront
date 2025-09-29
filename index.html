@@ -3,208 +3,204 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Loading Noloco Record</title>
+    <title>Noloco Redirect</title>
     <style>
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            font-family: Arial, sans-serif;
             padding: 20px;
-            margin: 0;
             background: #f5f5f5;
         }
-        .loading {
-            text-align: center;
-            padding: 40px 20px;
+        .status {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        .debug {
+            background: #f0f0f0;
+            padding: 15px;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 12px;
+            max-height: 400px;
+            overflow-y: auto;
+            white-space: pre-wrap;
         }
         .spinner {
             border: 3px solid #f3f3f3;
             border-top: 3px solid #3498db;
             border-radius: 50%;
-            width: 40px;
-            height: 40px;
+            width: 30px;
+            height: 30px;
             animation: spin 1s linear infinite;
-            margin: 0 auto 20px;
+            margin: 20px auto;
         }
         @keyframes spin {
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
         }
-        .error {
-            background: #fff3cd;
-            border: 1px solid #ffc107;
-            border-radius: 4px;
-            padding: 15px;
-            margin: 20px;
-            color: #856404;
-        }
-        .error h3 {
-            margin-top: 0;
-        }
-        .debug {
-            background: #e7f3ff;
-            border: 1px solid #2196F3;
-            border-radius: 4px;
-            padding: 15px;
-            margin: 20px;
-            font-family: monospace;
-            font-size: 12px;
-            max-height: 300px;
-            overflow: auto;
-        }
     </style>
 </head>
 <body>
-    <div class="loading">
+    <div class="status">
         <div class="spinner"></div>
-        <p>Loading Noloco record...</p>
-        <p style="font-size: 12px; color: #666;">Waiting for Front context...</p>
+        <p id="status">Initializing...</p>
     </div>
+    <div class="debug" id="debug"></div>
 
+    <script src="https://dl.frontapp.com/libs/frontjs.min.js"></script>
     <script>
-        // Noloco configuration
-        const NOLOCO_CONFIG = {
-            baseUrl: 'https://xpertfunding.noloco.co',
-            collectionPath: '%F0%9F%92%B0-funding-database/view',
+        // Configuration
+        const CONFIG = {
+            nolocoBase: 'https://xpertfunding.noloco.co',
+            nolocoPath: '%F0%9F%92%B0-funding-database/view',
             parentPage: 'eyJlbGVtZW50SWQiOiJ2ZXc1ZU1mbzVXSzlqaExJdWJfRXZVMVYiLCJlbmFibGVkIjp0cnVlLCJwYXJhbXMiOnt9fQ%3D%3D'
         };
 
-        let debugLog = [];
-        function log(message, data = null) {
-            console.log(message, data);
-            debugLog.push(`${message} ${data ? JSON.stringify(data, null, 2) : ''}`);
+        let debugOutput = [];
+        
+        function log(msg, data) {
+            const timestamp = new Date().toISOString().split('T')[1].split('.')[0];
+            const line = `[${timestamp}] ${msg}${data ? '\n' + JSON.stringify(data, null, 2) : ''}`;
+            debugOutput.push(line);
+            document.getElementById('debug').textContent = debugOutput.join('\n\n');
+            console.log(msg, data);
         }
 
-        function showError(message) {
-            document.body.innerHTML = `
-                <div class="error">
-                    <h3>⚠️ Cannot Load Record</h3>
-                    <p>${message}</p>
-                </div>
-                <div class="debug">
-                    <strong>Debug Log:</strong><br>
-                    ${debugLog.join('<br>')}
-                </div>
-            `;
+        function updateStatus(msg) {
+            document.getElementById('status').textContent = msg;
         }
 
-        function buildNolocoUrl(recordId) {
-            const url = `${NOLOCO_CONFIG.baseUrl}/${NOLOCO_CONFIG.collectionPath}/${recordId}?_parentPage=${NOLOCO_CONFIG.parentPage}`;
-            return url;
+        function redirect(recordId) {
+            const url = `${CONFIG.nolocoBase}/${CONFIG.nolocoPath}/${recordId}?_parentPage=${CONFIG.parentPage}`;
+            log('Redirecting to:', url);
+            updateStatus('Redirecting to Noloco...');
+            window.location.href = url;
         }
 
-        // Wait for Front SDK to load
-        function initializeFront() {
-            log('Checking if Front SDK is available...');
+        // Wait for Front to be available
+        let attempts = 0;
+        function checkFront() {
+            attempts++;
+            log(`Attempt ${attempts}: Checking for Front SDK...`);
             
             if (typeof Front === 'undefined') {
-                log('Front SDK not loaded yet, retrying...');
-                setTimeout(initializeFront, 500);
+                if (attempts < 20) {
+                    setTimeout(checkFront, 500);
+                } else {
+                    updateStatus('ERROR: Front SDK not loading');
+                    log('ERROR: Front SDK never loaded after 10 seconds');
+                }
                 return;
             }
 
-            log('Front SDK loaded successfully!');
-
-            // Try different initialization methods
+            log('✓ Front SDK loaded!');
+            log('Front object properties:', Object.keys(Front));
+            log('Front object:', Front);
             
-            // Method 1: contextUpdates.subscribe
-            try {
-                log('Trying Method 1: contextUpdates.subscribe');
-                Front.contextUpdates.subscribe(context => {
-                    log('Method 1 - Received context', context);
-                    handleContext(context);
-                });
-            } catch (e) {
-                log('Method 1 failed', e.message);
-            }
-
-            // Method 2: Direct context access
-            try {
-                log('Trying Method 2: Direct context access');
-                setTimeout(() => {
-                    if (Front.context) {
-                        log('Method 2 - Found context directly', Front.context);
-                        handleContext(Front.context);
-                    } else {
-                        log('Method 2 - No direct context available');
-                    }
-                }, 1000);
-            } catch (e) {
-                log('Method 2 failed', e.message);
-            }
-
-            // Method 3: Listen for messages
-            try {
-                log('Trying Method 3: Window message listener');
-                window.addEventListener('message', (event) => {
-                    log('Received window message', event.data);
-                    if (event.data && event.data.context) {
-                        log('Method 3 - Found context in message');
-                        handleContext(event.data.context);
-                    }
-                });
-            } catch (e) {
-                log('Method 3 failed', e.message);
-            }
+            // Try all possible methods
+            tryAllMethods();
         }
 
-        function handleContext(context) {
-            try {
-                log('Processing context', context);
+        function tryAllMethods() {
+            updateStatus('Looking for conversation context...');
+
+            // Method 1: Check if Front has getContext
+            if (typeof Front.getContext === 'function') {
+                log('Trying: Front.getContext()');
+                try {
+                    Front.getContext().then(ctx => {
+                        log('✓ Front.getContext() returned:', ctx);
+                        processContext(ctx);
+                    }).catch(err => {
+                        log('✗ Front.getContext() error:', err.message);
+                    });
+                } catch (e) {
+                    log('✗ Front.getContext() failed:', e.message);
+                }
+            } else {
+                log('✗ Front.getContext is not a function');
+            }
+
+            // Method 2: Check Front.context directly
+            if (Front.context) {
+                log('✓ Found Front.context:', Front.context);
+                processContext(Front.context);
+            } else {
+                log('✗ Front.context is undefined');
+            }
+
+            // Method 3: Listen for postMessage
+            log('Setting up postMessage listener...');
+            window.addEventListener('message', (event) => {
+                log('Received postMessage from:', event.origin);
+                log('postMessage data:', event.data);
                 
-                // Check if conversation exists
-                if (!context || !context.conversation) {
-                    showError('No conversation context found.');
-                    return;
+                if (event.data && typeof event.data === 'object') {
+                    if (event.data.conversation) {
+                        log('✓ Found conversation in postMessage');
+                        processContext(event.data);
+                    }
                 }
+            });
 
-                log('Conversation found', context.conversation);
-
-                // Get custom fields
-                const customFields = context.conversation.custom_fields || {};
-                log('Custom fields object', customFields);
-                log('Available custom field keys', Object.keys(customFields));
-
-                // Try multiple possible key names
-                const recordId = customFields['Airtable Record ID'] 
-                              || customFields['airtable_record_id']
-                              || customFields['airtableRecordId']
-                              || customFields['fld_orx4'];
-
-                if (!recordId) {
-                    const availableKeys = Object.keys(customFields);
-                    showError(`No Airtable Record ID found.<br><br>Available custom field keys: ${availableKeys.length > 0 ? availableKeys.join(', ') : 'None'}<br><br>Custom fields object: ${JSON.stringify(customFields, null, 2)}`);
-                    return;
+            // Method 4: Check if there's an on/addEventListener
+            if (typeof Front.on === 'function') {
+                log('Trying: Front.on()');
+                try {
+                    Front.on('*', (data) => {
+                        log('Front.on received:', data);
+                        processContext(data);
+                    });
+                } catch (e) {
+                    log('✗ Front.on failed:', e.message);
                 }
+            }
 
-                log('Found record ID', recordId);
-
-                // Build URL and redirect
-                const nolocoUrl = buildNolocoUrl(recordId);
-                log('Redirecting to', nolocoUrl);
-                window.location.href = nolocoUrl;
-
-            } catch (error) {
-                log('Error in handleContext', error.message);
-                console.error('Full error:', error);
-                showError(`An error occurred: ${error.message}`);
+            // Request context from parent
+            log('Requesting context from parent window...');
+            if (window.parent && window.parent !== window) {
+                window.parent.postMessage({ type: 'getContext' }, '*');
+                window.parent.postMessage({ type: 'front:requestContext' }, '*');
             }
         }
 
-        // Start initialization when DOM is ready
-        if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', initializeFront);
-        } else {
-            initializeFront();
+        function processContext(context) {
+            log('Processing context:', context);
+            updateStatus('Processing context...');
+
+            if (!context || !context.conversation) {
+                log('✗ No conversation in context');
+                updateStatus('ERROR: No conversation found');
+                return;
+            }
+
+            const conv = context.conversation;
+            log('Conversation ID:', conv.id);
+            log('Custom fields:', conv.custom_fields);
+
+            const customFields = conv.custom_fields || {};
+            const keys = Object.keys(customFields);
+            log('Available custom field keys:', keys);
+
+            // Try to find record ID
+            const recordId = customFields['Airtable Record ID'] 
+                          || customFields['airtable_record_id']
+                          || customFields['airtableRecordId']
+                          || customFields['fld_orx4'];
+
+            if (recordId) {
+                log('✓ Found Record ID:', recordId);
+                redirect(recordId);
+            } else {
+                updateStatus('ERROR: No Airtable Record ID found');
+                log('✗ No Record ID found in custom fields');
+                log('Custom fields content:', customFields);
+            }
         }
 
-        // Timeout fallback
-        setTimeout(() => {
-            if (document.querySelector('.loading')) {
-                showError('Failed to initialize Front plugin after 10 seconds. The Front SDK may not be loading properly.');
-            }
-        }, 10000);
+        // Start
+        checkFront();
     </script>
-    
-    <!-- Front SDK - try multiple versions -->
-    <script src="https://dl.frontapp.com/libs/frontjs.min.js"></script>
 </body>
 </html>
