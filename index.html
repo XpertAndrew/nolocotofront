@@ -54,7 +54,10 @@
         const CONFIG = {
             nolocoBase: 'https://xpertfunding.noloco.co',
             nolocoPath: '%F0%9F%92%B0-funding-database/view',
-            parentPage: 'eyJlbGVtZW50SWQiOiJ2ZXc1ZU1mbzVXSzlqaExJdWJfRXZVMVYiLCJlbmFibGVkIjp0cnVlLCJwYXJhbXMiOnt9fQ%3D%3D'
+            parentPage: 'eyJlbGVtZW50SWQiOiJ2ZXc1ZU1mbzVXSzlqaExJdWJfRXZVMVYiLCJlbmFibGVkIjp0cnVlLCJwYXJhbXMiOnt9fQ%3D%3D',
+            // Front app credentials
+            appSecret: '53ace6ddcc5f6b7e8fdf3d670f31e8d3',
+            appUuid: '9e281cb296c1126b'
         };
 
         let debugOutput = [];
@@ -117,23 +120,30 @@
             if (!Front.started) {
                 log('Front.started is false, attempting initialization...');
                 
-                if (typeof Front.start === 'function') {
-                    log('Calling Front.start()...');
+                if (typeof Front.init === 'function') {
+                    log('Calling Front.init() with credentials...');
                     try {
-                        Front.start();
-                        log('✓ Front.start() called successfully');
+                        // Try passing credentials
+                        Front.init({
+                            appSecret: CONFIG.appSecret,
+                            appUuid: CONFIG.appUuid
+                        });
+                        log('✓ Front.init() called with config');
                     } catch (e) {
-                        log('✗ Front.start() error:', e.message);
-                    }
-                } else if (typeof Front.init === 'function') {
-                    log('Calling Front.init()...');
-                    try {
-                        Front.init();
-                        log('✓ Front.init() called successfully');
-                    } catch (e) {
-                        log('✗ Front.init() error:', e.message);
+                        log('Init with config failed, trying without:', e.message);
+                        try {
+                            Front.init();
+                            log('✓ Front.init() called without config');
+                        } catch (e2) {
+                            log('✗ Front.init() error:', e2.message);
+                        }
                     }
                 }
+                
+                // Check if it's now started
+                setTimeout(() => {
+                    log('After init, Front.started is:', Front.started);
+                }, 500);
             }
 
             updateStatus('Looking for conversation context...');
